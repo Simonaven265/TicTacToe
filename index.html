@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'board-bg': '#2c3e50',
+                        'cell-hover': '#34495e'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="container mx-auto p-4">
+        <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Tic Tac Toe</h1>
+        
+        <div id="game-container" class="bg-white shadow-xl rounded-lg p-6 max-w-md mx-auto">
+            <div id="board" class="grid grid-cols-3 gap-4 mb-6">
+            </div>
+            
+            <div id="status" class="text-center text-xl font-semibold mb-4 text-gray-700">
+                Your Turn (X)
+            </div>
+            
+            <div class="flex justify-center space-x-4">
+                <button id="reset-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                    Reset Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TicTacToe {
+            constructor() {
+                this.board = Array(9).fill(null);
+                this.currentPlayer = 'X';
+                this.gameOver = false;
+                this.initializeBoard();
+                this.addEventListeners();
+            }
+
+            initializeBoard() {
+                const boardElement = document.getElementById('board');
+                boardElement.innerHTML = '';
+                
+                this.board.forEach((_, index) => {
+                    const cell = document.createElement('div');
+                    cell.classList.add(
+                        'bg-board-bg', 'h-24', 'flex', 'items-center', 'justify-center', 
+                        'text-5xl', 'font-bold', 'text-white', 'cursor-pointer', 
+                        'hover:bg-cell-hover', 'transition', 'rounded'
+                    );
+                    cell.dataset.index = index;
+                    boardElement.appendChild(cell);
+                });
+            }
+
+            addEventListeners() {
+                const boardElement = document.getElementById('board');
+                const resetButton = document.getElementById('reset-btn');
+                
+                boardElement.addEventListener('click', (e) => {
+                    const cell = e.target.closest('div[data-index]');
+                    if (cell && !this.gameOver) {
+                        const index = cell.dataset.index;
+                        this.makeMove(parseInt(index));
+                    }
+                });
+
+                resetButton.addEventListener('click', () => this.resetGame());
+            }
+
+            makeMove(index) {
+                if (this.board[index] || this.gameOver) return;
+
+                this.board[index] = this.currentPlayer;
+                this.updateBoardDisplay();
+
+                if (this.checkWinner(this.currentPlayer)) {
+                    this.endGame(`${this.currentPlayer} wins!`);
+                    return;
+                }
+
+                if (this.board.every(cell => cell !== null)) {
+                    this.endGame('Draw!');
+                    return;
+                }
+
+                this.currentPlayer = 'X';
+                this.aiMove();
+            }
+
+            aiMove() {
+                const availableMoves = this.board.reduce((moves, cell, index) => {
+                    if (cell === null) moves.push(index);
+                    return moves;
+                }, []);
+
+                if (availableMoves.length === 0) return;
+
+                const bestMove = this.findBestMove();
+                this.board[bestMove] = 'O';
+                this.updateBoardDisplay();
+
+                if (this.checkWinner('O')) {
+                    this.endGame('O wins!');
+                    return;
+                }
+
+                if (this.board.every(cell => cell !== null)) {
+                    this.endGame('Draw!');
+                    return;
+                }
+
+                this.currentPlayer = 'X';
+            }
+
+            findBestMove() {
+                const minimax = (board, depth, isMaximizing) => {
+                    const scores = { 'O': 10, 'X': -10, 'draw': 0 };
+                    const result = this.checkWinnerDetailed();
+
+                    if (result) {
+                        return scores[result];
+                    }
+
+                    if (isMaximizing) {
+                        let bestScore = -Infinity;
+                        for (let i = 0; i < board.length; i++) {
+                            if (board[i] === null) {
+                                board[i] = 'O';
+                                let score = minimax(board, depth + 1, false);
+                                board[i] = null;
+                                bestScore = Math.max(score, bestScore);
+                            }
+                        }
+                        return bestScore;
+                    } else {
+                        let bestScore = Infinity;
+                        for (let i = 0; i < board.length; i++) {
+                            if (board[i] === null) {
+                                board[i] = 'X';
+                                let score = minimax(board, depth + 1, true);
+                                board[i] = null;
+                                bestScore = Math.min(score, bestScore);
+                            }
+                        }
+                        return bestScore;
+                    }
+                };
+
+                let bestScore = -Infinity;
+                let bestMove = null;
+
+                for (let i = 0; i < this.board.length; i++) {
+                    if (this.board[i] === null) {
+                        this.board[i] = 'O';
+                        let score = minimax([...this.board], 0, false);
+                        this.board[i] = null;
+
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = i;
+                        }
+                    }
+                }
+
+                return bestMove;
+            }
+
+            updateBoardDisplay() {
+                const cells = document.querySelectorAll('#board > div');
+                cells.forEach((cell, index) => {
+                    cell.textContent = this.board[index] || '';
+                    cell.classList.toggle('text-blue-500', this.board[index] === 'X');
+                    cell.classList.toggle('text-red-500', this.board[index] === 'O');
+                });
+
+                document.getElementById('status').textContent = 
+                    this.gameOver ? 'Game Over' : 'Your Turn (X)';
+            }
+
+            checkWinner(player) {
+                const winPatterns = [
+                    [0,1,2], [3,4,5], [6,7,8],
+                    [0,3,6], [1,4,7], [2,5,8],
+                    [0,4,8], [2,4,6]
+                ];
+
+                return winPatterns.some(pattern => 
+                    pattern.every(index => this.board[index] === player)
+                );
+            }
+
+            checkWinnerDetailed() {
+                const winPatterns = [
+                    [0,1,2], [3,4,5], [6,7,8],
+                    [0,3,6], [1,4,7], [2,5,8],
+                    [0,4,8], [2,4,6]
+                ];
+
+                for (let pattern of winPatterns) {
+                    if (pattern.every(index => this.board[index] === 'O')) return 'O';
+                    if (pattern.every(index => this.board[index] === 'X')) return 'X';
+                }
+
+                return this.board.every(cell => cell !== null) ? 'draw' : null;
+            }
+
+            endGame(message) {
+                this.gameOver = true;
+                document.getElementById('status').textContent = message;
+            }
+
+            resetGame() {
+                this.board = Array(9).fill(null);
+                this.currentPlayer = 'X';
+                this.gameOver = false;
+                this.initializeBoard();
+                document.getElementById('status').textContent = 'Your Turn (X)';
+            }
+        }
+
+        new TicTacToe();
+    </script>
+</body>
+</html>
