@@ -11,7 +11,8 @@
                 extend: {
                     colors: {
                         'board-bg': '#2c3e50',
-                        'cell-hover': '#34495e'
+                        'cell-hover': '#34495e',
+                        'highlight': '#1abc9c'
                     }
                 }
             }
@@ -31,7 +32,7 @@
             </div>
             
             <div class="flex justify-center space-x-4">
-                <button id="reset-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded">
+                <button id="reset-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:bg-gray-300">
                     Reset Game
                 </button>
             </div>
@@ -57,7 +58,8 @@
                     cell.classList.add(
                         'bg-board-bg', 'h-24', 'flex', 'items-center', 'justify-center', 
                         'text-5xl', 'font-bold', 'text-white', 'cursor-pointer', 
-                        'hover:bg-cell-hover', 'transition', 'rounded'
+                        'hover:bg-cell-hover', 'transition', 'rounded',
+                        'shadow-sm'
                     );
                     cell.dataset.index = index;
                     boardElement.appendChild(cell);
@@ -86,7 +88,7 @@
                 this.updateBoardDisplay();
 
                 if (this.checkWinner(this.currentPlayer)) {
-                    this.endGame(`${this.currentPlayer} wins!`);
+                    this.endGame(`${this.currentPlayer} wins!`, this.currentPlayer);
                     return;
                 }
 
@@ -112,7 +114,7 @@
                 this.updateBoardDisplay();
 
                 if (this.checkWinner('O')) {
-                    this.endGame('O wins!');
+                    this.endGame('O wins!', 'O');
                     return;
                 }
 
@@ -186,7 +188,7 @@
                 });
 
                 document.getElementById('status').textContent = 
-                    this.gameOver ? 'Game Over' : 'Your Turn (X)';
+                    this.gameOver ? 'Game Over' : this.currentPlayer === 'X' ? 'Your Turn (X)' : 'AI is Thinking...';
             }
 
             checkWinner(player) {
@@ -216,9 +218,18 @@
                 return this.board.every(cell => cell !== null) ? 'draw' : null;
             }
 
-            endGame(message) {
+            endGame(message, winner = null) {
                 this.gameOver = true;
                 document.getElementById('status').textContent = message;
+
+                if (winner) {
+                    const cells = document.querySelectorAll('#board > div');
+                    cells.forEach((cell, index) => {
+                        if (this.checkWinner(winner) && cell.textContent === winner) {
+                            cell.classList.add('bg-highlight');
+                        }
+                    });
+                }
             }
 
             resetGame() {
