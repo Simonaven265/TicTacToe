@@ -24,6 +24,12 @@
         <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Tic Tac Toe</h1>
 
         <div id="game-container" class="bg-white shadow-xl rounded-lg p-6 max-w-md mx-auto">
+            <div class="text-center mb-4">
+                <button id="toggle-mode-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">
+                    Switch to Player vs AI
+                </button>
+            </div>
+
             <div id="board" class="grid grid-cols-3 gap-4 mb-6">
             </div>
 
@@ -55,6 +61,7 @@
                 this.playerWins = 0;
                 this.aiWins = 0;
                 this.draws = 0;
+                this.isAIEnabled = true;
                 this.initializeBoard();
                 this.addEventListeners();
             }
@@ -79,6 +86,7 @@
             addEventListeners() {
                 const boardElement = document.getElementById('board');
                 const resetButton = document.getElementById('reset-btn');
+                const toggleModeButton = document.getElementById('toggle-mode-btn');
 
                 boardElement.addEventListener('click', (e) => {
                     const cell = e.target.closest('div[data-index]');
@@ -89,6 +97,14 @@
                 });
 
                 resetButton.addEventListener('click', () => this.resetGame());
+                toggleModeButton.addEventListener('click', () => this.toggleGameMode());
+            }
+
+            toggleGameMode() {
+                this.isAIEnabled = !this.isAIEnabled;
+                document.getElementById('toggle-mode-btn').textContent = 
+                    this.isAIEnabled ? 'Switch to Player vs Player' : 'Switch to Player vs AI';
+                this.resetGame();
             }
 
             makeMove(index) {
@@ -107,8 +123,11 @@
                     return;
                 }
 
-                this.currentPlayer = 'X';
-                this.aiMove();
+                this.currentPlayer = this.currentPlayer === 'X' ? 'O' : 'X';
+                
+                if (this.isAIEnabled && this.currentPlayer === 'O') {
+                    this.aiMove();
+                }
             }
 
             aiMove() {
@@ -124,7 +143,7 @@
                 this.updateBoardDisplay();
 
                 if (this.checkWinner('O')) {
-                    this.endGame('O wins!', 'O');
+                    this.endGame('AI (O) wins!', 'O');
                     return;
                 }
 
@@ -198,7 +217,7 @@
                 });
 
                 document.getElementById('status').textContent = 
-                    this.gameOver ? 'Game Over' : this.currentPlayer === 'X' ? 'Your Turn (X)' : 'AI is Thinking...';
+                    this.gameOver ? 'Game Over' : this.currentPlayer === 'X' ? 'Your Turn (X)' : (this.isAIEnabled ? 'AI is Thinking...' : 'Player O\'s Turn');
             }
 
             checkWinner(player) {
