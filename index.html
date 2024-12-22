@@ -20,24 +20,38 @@
     </script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="container mx-auto p-4">
+    <div class="container mx-auto p-4 relative">
+        <!-- Add dropdown menu -->
+        <div class="absolute top-0 left-0">
+            <div class="relative">
+                <button id="game-mode-btn" class="bg-purple-500 hover:bg-purple-600 text-white py-2 px-4 rounded flex items-center">
+                    Game Modes
+                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                </button>
+                <div id="game-mode-dropdown" class="hidden absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                    <div class="py-1" role="menu">
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="pvp">Player vs Player</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="smart-ai">Smart AI</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="easy-ai">Easy AI</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="random-ai">Random AI</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="inverted">Inverted Mode</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="invisible">Invisible Mode</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <h1 class="text-4xl font-bold text-center mb-8 text-gray-800">Tic Tac Toe</h1>
 
         <div id="game-container" class="bg-white shadow-xl rounded-lg p-6 max-w-md mx-auto">
-            <div class="text-center mb-4">
-                <button id="toggle-mode-btn" class="bg-green-500 hover:bg-green-600 text-white py-2 px-4 rounded">
-                    Switch to Player vs AI
-                </button>
-            </div>
-
-            <div id="board" class="grid grid-cols-3 gap-4 mb-6">
-            </div>
+            <div id="board" class="grid grid-cols-3 gap-4 mb-6"></div>
 
             <div id="status" class="text-center text-xl font-semibold mb-4 text-gray-700">
                 Your Turn (X)
             </div>
 
-            <!-- Score Display -->
             <div class="flex justify-between text-lg text-gray-700">
                 <div><strong>Player (X): </strong><span id="player-wins">0</span> Wins</div>
                 <div><strong>AI (O): </strong><span id="ai-wins">0</span> Wins</div>
@@ -62,8 +76,13 @@
                 this.aiWins = 0;
                 this.draws = 0;
                 this.isAIEnabled = true;
+                this.gameMode = 'smart-ai'; // Add new property
+                this.invisibleTurns = 0;
+                this.invisibleModeActive = false;
+                this.hiddenBoard = Array(9).fill(null);
                 this.initializeBoard();
                 this.addEventListeners();
+                this.setupGameModeDropdown();
             }
 
             initializeBoard() {
@@ -86,7 +105,6 @@
             addEventListeners() {
                 const boardElement = document.getElementById('board');
                 const resetButton = document.getElementById('reset-btn');
-                const toggleModeButton = document.getElementById('toggle-mode-btn');
 
                 boardElement.addEventListener('click', (e) => {
                     const cell = e.target.closest('div[data-index]');
@@ -97,24 +115,52 @@
                 });
 
                 resetButton.addEventListener('click', () => this.resetGame());
-                toggleModeButton.addEventListener('click', () => this.toggleGameMode());
             }
 
-            toggleGameMode() {
-                this.isAIEnabled = !this.isAIEnabled;
-                document.getElementById('toggle-mode-btn').textContent = 
-                    this.isAIEnabled ? 'Switch to Player vs Player' : 'Switch to Player vs AI';
-                this.resetGame();
+            setupGameModeDropdown() {
+                const dropdownBtn = document.getElementById('game-mode-btn');
+                const dropdown = document.getElementById('game-mode-dropdown');
+
+                dropdownBtn.addEventListener('click', () => {
+                    dropdown.classList.toggle('hidden');
+                });
+
+                document.addEventListener('click', (e) => {
+                    if (!dropdownBtn.contains(e.target)) {
+                        dropdown.classList.add('hidden');
+                    }
+                });
+
+                document.querySelectorAll('#game-mode-dropdown button').forEach(button => {
+                    button.addEventListener('click', () => {
+                        this.gameMode = button.dataset.mode;
+                        dropdownBtn.textContent = button.textContent;
+                        dropdown.classList.add('hidden');
+                        this.resetGame();
+                    });
+                });
             }
 
             makeMove(index) {
                 if (this.board[index] || this.gameOver) return;
 
                 this.board[index] = this.currentPlayer;
+                if (this.gameMode === 'invisible') {
+                    this.hiddenBoard[index] = this.currentPlayer;
+                }
                 this.updateBoardDisplay();
 
                 if (this.checkWinner(this.currentPlayer)) {
-                    this.endGame(`${this.currentPlayer} wins!`, this.currentPlayer);
+                    let winner;
+                    if (this.gameMode === 'inverted') {
+                        winner = this.currentPlayer === 'X' ? 'O' : 'X';
+                        this.endGame(`${this.currentPlayer === 'X' ? 'You' : 'AI'} lost!`, winner);
+                    } else {
+                        winner = this.currentPlayer === 'X' ? 'You' : 
+                            (this.gameMode === 'random-ai' ? 'Random AI' : 
+                             this.gameMode === 'easy-ai' ? 'Easy AI' : 'Smart AI');
+                        this.endGame(`${winner} wins!`, this.currentPlayer);
+                    }
                     return;
                 }
 
@@ -125,77 +171,63 @@
 
                 this.currentPlayer = this.currentPlayer === 'X' ? 'O' : 'X';
                 
-                if (this.isAIEnabled && this.currentPlayer === 'O') {
+                if (this.gameMode === 'invisible') {
+                    this.invisibleTurns++;
+                    if (this.invisibleTurns >= 4) {
+                        this.invisibleModeActive = true;
+                        this.updateBoardDisplay();
+                    }
+                }
+
+                this.updateBoardDisplay();
+                
+                if (this.gameMode !== 'pvp' && !this.gameOver && this.currentPlayer === 'O') {
                     this.aiMove();
                 }
             }
 
             aiMove() {
-                const availableMoves = this.board.reduce((moves, cell, index) => {
-                    if (cell === null) moves.push(index);
-                    return moves;
-                }, []);
+                setTimeout(() => {
+                    let moveIndex;
+                    
+                    switch(this.gameMode) {
+                        case 'random-ai':
+                            moveIndex = this.getRandomMove();
+                            break;
+                        case 'easy-ai':
+                        case 'invisible': // Add invisible mode to use easy AI logic
+                            moveIndex = Math.random() < 0.7 ? this.findBestMove() : this.getRandomMove();
+                            break;
+                        default:
+                            moveIndex = this.findBestMove();
+                    }
 
-                if (availableMoves.length === 0) return;
+                    if (moveIndex !== null) {
+                        this.makeMove(moveIndex);
+                    }
+                }, 500);
+            }
 
-                const bestMove = this.findBestMove();
-                this.board[bestMove] = 'O';
-                this.updateBoardDisplay();
-
-                if (this.checkWinner('O')) {
-                    this.endGame('AI (O) wins!', 'O');
-                    return;
+            getRandomMove() {
+                const availableMoves = [];
+                for (let i = 0; i < this.board.length; i++) {
+                    if (this.board[i] === null) {
+                        availableMoves.push(i);
+                    }
                 }
-
-                if (this.board.every(cell => cell !== null)) {
-                    this.endGame('Draw!');
-                    return;
-                }
-
-                this.currentPlayer = 'X';
+                return availableMoves.length > 0 
+                    ? availableMoves[Math.floor(Math.random() * availableMoves.length)] 
+                    : null;
             }
 
             findBestMove() {
-                const minimax = (board, depth, isMaximizing) => {
-                    const scores = { 'O': 10, 'X': -10, 'draw': 0 };
-                    const result = this.checkWinnerDetailed();
-
-                    if (result) {
-                        return scores[result];
-                    }
-
-                    if (isMaximizing) {
-                        let bestScore = -Infinity;
-                        for (let i = 0; i < board.length; i++) {
-                            if (board[i] === null) {
-                                board[i] = 'O';
-                                let score = minimax(board, depth + 1, false);
-                                board[i] = null;
-                                bestScore = Math.max(score, bestScore);
-                            }
-                        }
-                        return bestScore;
-                    } else {
-                        let bestScore = Infinity;
-                        for (let i = 0; i < board.length; i++) {
-                            if (board[i] === null) {
-                                board[i] = 'X';
-                                let score = minimax(board, depth + 1, true);
-                                board[i] = null;
-                                bestScore = Math.min(score, bestScore);
-                            }
-                        }
-                        return bestScore;
-                    }
-                };
-
                 let bestScore = -Infinity;
                 let bestMove = null;
 
                 for (let i = 0; i < this.board.length; i++) {
                     if (this.board[i] === null) {
                         this.board[i] = 'O';
-                        let score = minimax([...this.board], 0, false);
+                        let score = this.minimax(this.board, 0, false);
                         this.board[i] = null;
 
                         if (score > bestScore) {
@@ -208,16 +240,66 @@
                 return bestMove;
             }
 
+            minimax(board, depth, isMaximizing) {
+                let result = this.checkWinnerDetailed();
+                
+                if (this.gameMode === 'inverted') {
+                    if (result === 'O') return depth - 10;
+                    if (result === 'X') return 10 - depth;
+                } else {
+                    if (result === 'O') return 10 - depth;
+                    if (result === 'X') return depth - 10;
+                }
+                if (result === 'draw') return 0;
+
+                if (isMaximizing) {
+                    let bestScore = -Infinity;
+                    for (let i = 0; i < board.length; i++) {
+                        if (board[i] === null) {
+                            board[i] = 'O';
+                            let score = this.minimax(board, depth + 1, false);
+                            board[i] = null;
+                            bestScore = Math.max(score, bestScore);
+                        }
+                    }
+                    return bestScore;
+                } else {
+                    let bestScore = Infinity;
+                    for (let i = 0; i < board.length; i++) {
+                        if (board[i] === null) {
+                            board[i] = 'X';
+                            let score = this.minimax(board, depth + 1, true);
+                            board[i] = null;
+                            bestScore = Math.min(score, bestScore);
+                        }
+                    }
+                    return bestScore;
+                }
+            }
+
             updateBoardDisplay() {
                 const cells = document.querySelectorAll('#board > div');
                 cells.forEach((cell, index) => {
-                    cell.textContent = this.board[index] || '';
-                    cell.classList.toggle('text-blue-500', this.board[index] === 'X');
-                    cell.classList.toggle('text-red-500', this.board[index] === 'O');
+                    if (this.gameMode === 'invisible' && this.invisibleModeActive && !this.gameOver) {
+                        cell.textContent = '?';
+                        cell.classList.remove('text-blue-500', 'text-red-500');
+                        cell.classList.add('text-gray-400');
+                    } else {
+                        cell.textContent = this.board[index] || '';
+                        cell.classList.toggle('text-blue-500', this.board[index] === 'X');
+                        cell.classList.toggle('text-red-500', this.board[index] === 'O');
+                    }
                 });
 
-                document.getElementById('status').textContent = 
-                    this.gameOver ? 'Game Over' : this.currentPlayer === 'X' ? 'Your Turn (X)' : (this.isAIEnabled ? 'AI is Thinking...' : 'Player O\'s Turn');
+                let statusText = this.gameOver ? 'Game Over' : 
+                    this.currentPlayer === 'X' ? 'Your Turn (X)' : 
+                    (this.gameMode !== 'pvp' ? 'AI is Thinking...' : 'Player O\'s Turn');
+
+                if (this.gameMode === 'invisible' && this.invisibleModeActive) {
+                    statusText += ' (Memory Mode Active!)';
+                }
+
+                document.getElementById('status').textContent = statusText;
             }
 
             checkWinner(player) {
@@ -259,7 +341,6 @@
                     this.draws++;
                 }
 
-                // Update score display
                 document.getElementById('player-wins').textContent = this.playerWins;
                 document.getElementById('ai-wins').textContent = this.aiWins;
                 document.getElementById('draws').textContent = this.draws;
@@ -276,8 +357,11 @@
 
             resetGame() {
                 this.board = Array(9).fill(null);
+                this.hiddenBoard = Array(9).fill(null);
                 this.currentPlayer = 'X';
                 this.gameOver = false;
+                this.invisibleTurns = 0;
+                this.invisibleModeActive = false;
                 this.initializeBoard();
                 document.getElementById('status').textContent = 'Your Turn (X)';
             }
