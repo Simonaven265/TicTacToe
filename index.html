@@ -18,6 +18,52 @@
             }
         }
     </script>
+    <style>
+        @keyframes winPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        .ultimate-winner {
+            animation: winPulse 1s infinite;
+            transition: all 0.3s ease;
+        }
+        .ultimate-winner-x {
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8) !important;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        .ultimate-winner-o {
+            background: linear-gradient(45deg, #ef4444, #b91c1c) !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+        /* Add new animations */
+        @keyframes celebrate {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0); }
+        }
+        .winner-cell {
+            animation: winPulse 1s infinite;
+        }
+        .winner-text {
+            animation: celebrate 1s infinite;
+            display: inline-block;
+        }
+        .cell-win-x {
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8) !important;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+        .cell-win-o {
+            background: linear-gradient(45deg, #ef4444, #b91c1c) !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+        .grid-won-x {
+            background: linear-gradient(45deg, #93c5fd, #3b82f6) !important;
+        }
+        .grid-won-o {
+            background: linear-gradient(45deg, #fca5a5, #ef4444) !important;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="container mx-auto p-4 relative">
@@ -87,6 +133,10 @@
                 this.invisibleTurns = 0;
                 this.invisibleModeActive = false;
                 this.hiddenBoard = Array(9).fill(null);
+                this.ultimateWinPattern = null; // Add this line
+                this.ultimateWinPatterns = {};  // Store winning patterns for each grid
+                this.winningCells = [];  // Add this line
+                this.lastMove = null; // Add this line to track last move
                 this.initializeBoard();
                 this.addEventListeners();
                 this.setupGameModeDropdown();
@@ -184,20 +234,30 @@
                 if (this.gameMode === 'ultimate') {
                     const [gridIndex, cellIndex] = index.split('-').map(Number);
                     
-                    if (this.activeGrid !== -1 && gridIndex !== this.activeGrid) return;
-                    if (this.subGridWins[gridIndex] || this.ultimateBoard[gridIndex][cellIndex]) return;
+                    if (this.activeGrid !== -1 && gridIndex !== this.activeGrid) {
+                        document.getElementById('status').textContent = `Must play in grid ${this.activeGrid + 1}`;
+                        return;
+                    }
+                    if (this.subGridWins[gridIndex]) {
+                        document.getElementById('status').textContent = 'This grid is already won!';
+                        return;
+                    }
+                    if (this.ultimateBoard[gridIndex][cellIndex]) return;
                     
                     this.ultimateBoard[gridIndex][cellIndex] = this.currentPlayer;
+                    this.lastMove = { grid: gridIndex, cell: cellIndex }; // Store last move
                     
                     if (this.checkSubGridWin(gridIndex)) {
                         this.subGridWins[gridIndex] = this.currentPlayer;
                         if (this.checkUltimateWin()) {
-                            this.endGame(`${this.currentPlayer} wins Ultimate Game!`, this.currentPlayer);
+                            const winner = this.currentPlayer === 'X' ? 'Player X' : 'Player O';
+                            this.endGame(`${winner} wins the Ultimate Game!`, this.currentPlayer);
                             return;
                         }
                     }
                     
-                    this.activeGrid = this.subGridWins[cellIndex] ? -1 : cellIndex;
+                    // Check if next grid is playable
+                    this.activeGrid = this.subGridWins[cellIndex] || this.isGridFull(cellIndex) ? -1 : cellIndex;
                 } else {
                     if (this.board[index] || this.gameOver) return;
                     this.board[index] = this.currentPlayer;
@@ -338,18 +398,59 @@
                 
                 if (this.gameMode === 'ultimate') {
                     document.querySelectorAll('#board > div').forEach((grid, gridIndex) => {
-                        grid.classList.toggle('bg-blue-100', this.activeGrid === gridIndex);
-                        grid.classList.toggle('opacity-50', 
-                            this.activeGrid !== -1 && this.activeGrid !== gridIndex);
+                        // Reset all special classes first
+                        grid.classList.remove('bg-blue-100', 'opacity-50', 'ultimate-winner', 'ultimate-winner-x', 'ultimate-winner-o', 'grid-won-x', 'grid-won-o');
+                        
+                        if (this.gameOver && this.ultimateWinPattern?.includes(gridIndex)) {
+                            // Apply winning animation to winning grids
+                            grid.classList.add(
+                                'ultimate-winner',
+                                this.subGridWins[gridIndex] === 'X' ? 'ultimate-winner-x' : 'ultimate-winner-o'
+                            );
+                        } else {
+                            // Normal grid highlighting
+                            grid.classList.toggle('bg-blue-100', this.activeGrid === gridIndex);
+                            grid.classList.toggle('opacity-50', 
+                                this.activeGrid !== -1 && this.activeGrid !== gridIndex);
+                        }
+
+                        // Update grid background based on who won it
+                        if (this.subGridWins[gridIndex]) {
+                            grid.classList.add(
+                                this.subGridWins[gridIndex] === 'X' ? 'grid-won-x' : 'grid-won-o'
+                            );
+                        }
                     });
 
                     cells.forEach(cell => {
                         const [gridIndex, cellIndex] = cell.dataset.index.split('-').map(Number);
                         const value = this.ultimateBoard[gridIndex][cellIndex];
-                        cell.textContent = value || '';
-                        cell.classList.toggle('text-blue-500', value === 'X');
-                        cell.classList.toggle('text-red-500', value === 'O');
+                        
+                        // Reset cell classes
+                        cell.classList.remove('text-blue-500', 'text-red-500', 'cell-win-x', 'cell-win-o', 'bg-yellow-200');
+                        
+                        if (value) {
+                            cell.textContent = value;
+                            // Highlight winning cells in subgrids
+                            if (this.ultimateWinPatterns[gridIndex]?.includes(cellIndex)) {
+                                cell.classList.add(value === 'X' ? 'cell-win-x' : 'cell-win-o');
+                            } else {
+                                cell.classList.add(value === 'X' ? 'text-blue-500' : 'text-red-500');
+                                // Highlight last move
+                                if (this.lastMove && this.lastMove.grid === gridIndex && this.lastMove.cell === cellIndex) {
+                                    cell.classList.add('bg-yellow-200');
+                                    // Ensure the last move stays on top of other effects
+                                    cell.style.zIndex = '10';
+                                }
+                            }
+                        } else {
+                            cell.textContent = '';
+                            cell.style.zIndex = '1';
+                        }
                     });
+
+                    // Update status message for Ultimate mode
+                    document.getElementById('status').textContent = this.getStatusMessage();
                 } else {
                     cells.forEach((cell, index) => {
                         if (this.gameMode === 'invisible' && this.invisibleModeActive && !this.gameOver) {
@@ -371,7 +472,7 @@
                         statusText += ' (Memory Mode Active!)';
                     }
 
-                    document.getElementById('status').textContent = statusText;
+                    document.getElementById('status').textContent = this.getStatusMessage();
                 }
             }
 
@@ -385,9 +486,13 @@
                     [0,4,8], [2,4,6]
                 ];
 
-                return winPatterns.some(pattern => 
-                    pattern.every(index => this.board[index] === player)
-                );
+                for (let pattern of winPatterns) {
+                    if (pattern.every(index => this.board[index] === player)) {
+                        this.winningCells = pattern; // Store winning cells
+                        return true;
+                    }
+                }
+                return false;
             }
 
             checkMegaWin(player) {
@@ -424,9 +529,14 @@
                     [0,3,6], [1,4,7], [2,5,8],
                     [0,4,8], [2,4,6]
                 ];
-                return patterns.some(pattern => 
-                    pattern.every(i => grid[i] === this.currentPlayer)
-                );
+                
+                for (let pattern of patterns) {
+                    if (pattern.every(i => grid[i] === this.currentPlayer)) {
+                        this.ultimateWinPatterns[gridIndex] = pattern;
+                        return true;
+                    }
+                }
+                return false;
             }
 
             checkUltimateWin() {
@@ -435,9 +545,13 @@
                     [0,3,6], [1,4,7], [2,5,8],
                     [0,4,8], [2,4,6]
                 ];
-                return patterns.some(pattern => 
-                    pattern.every(i => this.subGridWins[i] === this.currentPlayer)
-                );
+                for (let pattern of patterns) {
+                    if (pattern.every(i => this.subGridWins[i] === this.currentPlayer)) {
+                        this.ultimateWinPattern = pattern; // Store winning pattern
+                        return true;
+                    }
+                }
+                return false;
             }
 
             checkWinnerDetailed() {
@@ -457,7 +571,9 @@
 
             endGame(message, winner = null) {
                 this.gameOver = true;
-                document.getElementById('status').textContent = message;
+                const emoji = winner === 'X' ? '🏆' : winner === 'O' ? '🎉' : '🤝';
+                document.getElementById('status').innerHTML = 
+                    `<span class="winner-text">${emoji} ${message} ${emoji}</span>`;
 
                 if (winner === 'X') {
                     this.playerWins++;
@@ -467,16 +583,17 @@
                     this.draws++;
                 }
 
+                // Update scores
                 document.getElementById('player-wins').textContent = this.playerWins;
                 document.getElementById('ai-wins').textContent = this.aiWins;
                 document.getElementById('draws').textContent = this.draws;
 
-                const cells = document.querySelectorAll('#board > div');
-                if (winner) {
-                    cells.forEach((cell, index) => {
-                        if (this.checkWinner(winner) && cell.textContent === winner) {
-                            cell.classList.add('bg-highlight');
-                        }
+                // Apply winning animation
+                if (winner && this.gameMode !== 'ultimate') {
+                    const cells = document.querySelectorAll('#board > div');
+                    this.winningCells.forEach(index => {
+                        cells[index].classList.add('winner-cell', 
+                            winner === 'X' ? 'cell-win-x' : 'cell-win-o');
                     });
                 }
             }
@@ -486,6 +603,8 @@
                     this.ultimateBoard = Array(9).fill().map(() => Array(9).fill(null));
                     this.subGridWins = Array(9).fill(null);
                     this.activeGrid = -1;
+                    this.ultimateWinPattern = null; // Reset winning pattern
+                    this.ultimateWinPatterns = {};
                 } else {
                     this.board = Array(this.gridSize * this.gridSize).fill(null);
                 }
@@ -494,8 +613,51 @@
                 this.gameOver = false;
                 this.invisibleTurns = 0;
                 this.invisibleModeActive = false;
+                this.winningCells = [];
+                this.lastMove = null; // Reset last move
                 this.initializeBoard();
-                document.getElementById('status').textContent = 'Your Turn (X)';
+                document.getElementById('status').textContent = this.getStatusMessage();
+            }
+
+            isGridFull(gridIndex) {
+                return this.ultimateBoard[gridIndex].every(cell => cell !== null);
+            }
+
+            getStatusMessage() {
+                if (this.gameOver) return '';
+
+                if (this.gameMode === 'ultimate') {
+                    const currentTurn = this.currentPlayer === 'X' ? 'Player X' : 'Player O';
+                    let message = `${currentTurn}'s Turn`;
+                    
+                    if (this.activeGrid !== -1) {
+                        message += ` (Play in grid ${this.activeGrid + 1})`;
+                    } else {
+                        message += ' (Can play in any grid)';
+                    }
+                    
+                    return message;
+                }
+
+                const playerName = this.currentPlayer === 'X' ? 'X' : 'O';
+                let baseMsg = `Player ${playerName}'s Turn`;
+
+                switch(this.gameMode) {
+                    case 'pvp':
+                        return baseMsg;
+                    case 'smart-ai':
+                        return this.currentPlayer === 'X' ? 'Your Turn' : 'Smart AI is thinking...';
+                    case 'easy-ai':
+                        return this.currentPlayer === 'X' ? 'Your Turn' : 'Easy AI is thinking...';
+                    case 'random-ai':
+                        return this.currentPlayer === 'X' ? 'Your Turn' : 'Random AI is thinking...';
+                    case 'inverted':
+                        return `${baseMsg} (Try to lose!)`;
+                    case 'invisible':
+                        return `${baseMsg}${this.invisibleModeActive ? ' (Memory Mode Active!)' : ''}`;
+                    default:
+                        return baseMsg;
+                }
             }
         }
 
