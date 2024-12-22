@@ -38,6 +38,9 @@
                         <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="random-ai">Random AI</button>
                         <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="inverted">Inverted Mode</button>
                         <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="invisible">Invisible Mode</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="mega-5">Mega 5x5</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="mega-4">Mega 4x4</button>
+                        <button class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" data-mode="ultimate">Ultimate</button>
                     </div>
                 </div>
             </div>
@@ -75,8 +78,12 @@
                 this.playerWins = 0;
                 this.aiWins = 0;
                 this.draws = 0;
-                this.isAIEnabled = true;
-                this.gameMode = 'smart-ai'; // Add new property
+                this.gameMode = 'smart-ai';
+                this.gridSize = 3;
+                this.winLength = 3;
+                this.ultimateBoard = Array(9).fill().map(() => Array(9).fill(null));
+                this.activeGrid = -1; // -1 means any grid is playable
+                this.subGridWins = Array(9).fill(null);
                 this.invisibleTurns = 0;
                 this.invisibleModeActive = false;
                 this.hiddenBoard = Array(9).fill(null);
@@ -89,17 +96,49 @@
                 const boardElement = document.getElementById('board');
                 boardElement.innerHTML = '';
 
-                this.board.forEach((_, index) => {
-                    const cell = document.createElement('div');
-                    cell.classList.add(
-                        'bg-board-bg', 'h-24', 'flex', 'items-center', 'justify-center', 
-                        'text-5xl', 'font-bold', 'text-white', 'cursor-pointer', 
-                        'hover:bg-cell-hover', 'transition', 'rounded',
-                        'shadow-sm'
-                    );
-                    cell.dataset.index = index;
-                    boardElement.appendChild(cell);
-                });
+                if (this.gameMode === 'ultimate') {
+                    boardElement.classList.remove('grid-cols-3', 'grid-cols-4', 'grid-cols-5');
+                    boardElement.classList.add('grid-cols-3', 'gap-2');
+
+                    for (let i = 0; i < 9; i++) {
+                        const subGrid = document.createElement('div');
+                        subGrid.classList.add('grid', 'grid-cols-3', 'gap-1', 'bg-gray-200', 'p-1', 'rounded');
+                        
+                        for (let j = 0; j < 9; j++) {
+                            const cell = this.createCell(`${i}-${j}`);
+                            cell.classList.remove('h-24');
+                            cell.classList.add('h-12');
+                            subGrid.appendChild(cell);
+                        }
+                        
+                        boardElement.appendChild(subGrid);
+                    }
+                } else {
+                    const size = this.gameMode.startsWith('mega') ? parseInt(this.gameMode.split('-')[1]) : 3;
+                    this.gridSize = size;
+                    this.winLength = size === 3 ? 3 : 4;
+                    this.board = Array(size * size).fill(null);
+
+                    boardElement.classList.remove('grid-cols-3', 'grid-cols-4', 'grid-cols-5');
+                    boardElement.classList.add(`grid-cols-${size}`);
+
+                    for (let i = 0; i < size * size; i++) {
+                        const cell = this.createCell(i);
+                        boardElement.appendChild(cell);
+                    }
+                }
+            }
+
+            createCell(index) {
+                const cell = document.createElement('div');
+                cell.classList.add(
+                    'bg-board-bg', 'flex', 'items-center', 'justify-center',
+                    'text-3xl', 'font-bold', 'text-white', 'cursor-pointer',
+                    'hover:bg-cell-hover', 'transition', 'rounded', 'shadow-sm',
+                    'h-24'
+                );
+                cell.dataset.index = index;
+                return cell;
             }
 
             addEventListeners() {
@@ -110,7 +149,7 @@
                     const cell = e.target.closest('div[data-index]');
                     if (cell && !this.gameOver) {
                         const index = cell.dataset.index;
-                        this.makeMove(parseInt(index));
+                        this.makeMove(index);
                     }
                 });
 
@@ -142,15 +181,31 @@
             }
 
             makeMove(index) {
-                if (this.board[index] || this.gameOver) return;
-
-                this.board[index] = this.currentPlayer;
-                if (this.gameMode === 'invisible') {
-                    this.hiddenBoard[index] = this.currentPlayer;
+                if (this.gameMode === 'ultimate') {
+                    const [gridIndex, cellIndex] = index.split('-').map(Number);
+                    
+                    if (this.activeGrid !== -1 && gridIndex !== this.activeGrid) return;
+                    if (this.subGridWins[gridIndex] || this.ultimateBoard[gridIndex][cellIndex]) return;
+                    
+                    this.ultimateBoard[gridIndex][cellIndex] = this.currentPlayer;
+                    
+                    if (this.checkSubGridWin(gridIndex)) {
+                        this.subGridWins[gridIndex] = this.currentPlayer;
+                        if (this.checkUltimateWin()) {
+                            this.endGame(`${this.currentPlayer} wins Ultimate Game!`, this.currentPlayer);
+                            return;
+                        }
+                    }
+                    
+                    this.activeGrid = this.subGridWins[cellIndex] ? -1 : cellIndex;
+                } else {
+                    if (this.board[index] || this.gameOver) return;
+                    this.board[index] = this.currentPlayer;
                 }
+
                 this.updateBoardDisplay();
 
-                if (this.checkWinner(this.currentPlayer)) {
+                if (this.gameMode !== 'ultimate' && this.checkWinner(this.currentPlayer)) {
                     let winner;
                     if (this.gameMode === 'inverted') {
                         winner = this.currentPlayer === 'X' ? 'O' : 'X';
@@ -278,31 +333,52 @@
             }
 
             updateBoardDisplay() {
-                const cells = document.querySelectorAll('#board > div');
-                cells.forEach((cell, index) => {
-                    if (this.gameMode === 'invisible' && this.invisibleModeActive && !this.gameOver) {
-                        cell.textContent = '?';
-                        cell.classList.remove('text-blue-500', 'text-red-500');
-                        cell.classList.add('text-gray-400');
-                    } else {
-                        cell.textContent = this.board[index] || '';
-                        cell.classList.toggle('text-blue-500', this.board[index] === 'X');
-                        cell.classList.toggle('text-red-500', this.board[index] === 'O');
+                const cells = document.querySelectorAll('#board > div' + 
+                    (this.gameMode === 'ultimate' ? ' > div' : ''));
+                
+                if (this.gameMode === 'ultimate') {
+                    document.querySelectorAll('#board > div').forEach((grid, gridIndex) => {
+                        grid.classList.toggle('bg-blue-100', this.activeGrid === gridIndex);
+                        grid.classList.toggle('opacity-50', 
+                            this.activeGrid !== -1 && this.activeGrid !== gridIndex);
+                    });
+
+                    cells.forEach(cell => {
+                        const [gridIndex, cellIndex] = cell.dataset.index.split('-').map(Number);
+                        const value = this.ultimateBoard[gridIndex][cellIndex];
+                        cell.textContent = value || '';
+                        cell.classList.toggle('text-blue-500', value === 'X');
+                        cell.classList.toggle('text-red-500', value === 'O');
+                    });
+                } else {
+                    cells.forEach((cell, index) => {
+                        if (this.gameMode === 'invisible' && this.invisibleModeActive && !this.gameOver) {
+                            cell.textContent = '?';
+                            cell.classList.remove('text-blue-500', 'text-red-500');
+                            cell.classList.add('text-gray-400');
+                        } else {
+                            cell.textContent = this.board[index] || '';
+                            cell.classList.toggle('text-blue-500', this.board[index] === 'X');
+                            cell.classList.toggle('text-red-500', this.board[index] === 'O');
+                        }
+                    });
+
+                    let statusText = this.gameOver ? 'Game Over' : 
+                        this.currentPlayer === 'X' ? 'Your Turn (X)' : 
+                        (this.gameMode !== 'pvp' ? 'AI is Thinking...' : 'Player O\'s Turn');
+
+                    if (this.gameMode === 'invisible' && this.invisibleModeActive) {
+                        statusText += ' (Memory Mode Active!)';
                     }
-                });
 
-                let statusText = this.gameOver ? 'Game Over' : 
-                    this.currentPlayer === 'X' ? 'Your Turn (X)' : 
-                    (this.gameMode !== 'pvp' ? 'AI is Thinking...' : 'Player O\'s Turn');
-
-                if (this.gameMode === 'invisible' && this.invisibleModeActive) {
-                    statusText += ' (Memory Mode Active!)';
+                    document.getElementById('status').textContent = statusText;
                 }
-
-                document.getElementById('status').textContent = statusText;
             }
 
             checkWinner(player) {
+                if (this.gameMode.startsWith('mega')) {
+                    return this.checkMegaWin(player);
+                }
                 const winPatterns = [
                     [0,1,2], [3,4,5], [6,7,8],
                     [0,3,6], [1,4,7], [2,5,8],
@@ -311,6 +387,56 @@
 
                 return winPatterns.some(pattern => 
                     pattern.every(index => this.board[index] === player)
+                );
+            }
+
+            checkMegaWin(player) {
+                // Check rows and columns
+                for (let i = 0; i < this.gridSize; i++) {
+                    for (let j = 0; j <= this.gridSize - this.winLength; j++) {
+                        // Check horizontal
+                        if ([...Array(this.winLength)].every((_, k) => 
+                            this.board[i * this.gridSize + j + k] === player)) return true;
+                        // Check vertical
+                        if ([...Array(this.winLength)].every((_, k) => 
+                            this.board[(j + k) * this.gridSize + i] === player)) return true;
+                    }
+                }
+
+                // Check diagonals
+                for (let i = 0; i <= this.gridSize - this.winLength; i++) {
+                    for (let j = 0; j <= this.gridSize - this.winLength; j++) {
+                        // Check diagonal
+                        if ([...Array(this.winLength)].every((_, k) => 
+                            this.board[(i + k) * this.gridSize + j + k] === player)) return true;
+                        // Check anti-diagonal
+                        if ([...Array(this.winLength)].every((_, k) => 
+                            this.board[(i + k) * this.gridSize + (j + this.winLength - 1 - k)] === player)) return true;
+                    }
+                }
+                return false;
+            }
+
+            checkSubGridWin(gridIndex) {
+                const grid = this.ultimateBoard[gridIndex];
+                const patterns = [
+                    [0,1,2], [3,4,5], [6,7,8],
+                    [0,3,6], [1,4,7], [2,5,8],
+                    [0,4,8], [2,4,6]
+                ];
+                return patterns.some(pattern => 
+                    pattern.every(i => grid[i] === this.currentPlayer)
+                );
+            }
+
+            checkUltimateWin() {
+                const patterns = [
+                    [0,1,2], [3,4,5], [6,7,8],
+                    [0,3,6], [1,4,7], [2,5,8],
+                    [0,4,8], [2,4,6]
+                ];
+                return patterns.some(pattern => 
+                    pattern.every(i => this.subGridWins[i] === this.currentPlayer)
                 );
             }
 
@@ -356,7 +482,13 @@
             }
 
             resetGame() {
-                this.board = Array(9).fill(null);
+                if (this.gameMode === 'ultimate') {
+                    this.ultimateBoard = Array(9).fill().map(() => Array(9).fill(null));
+                    this.subGridWins = Array(9).fill(null);
+                    this.activeGrid = -1;
+                } else {
+                    this.board = Array(this.gridSize * this.gridSize).fill(null);
+                }
                 this.hiddenBoard = Array(9).fill(null);
                 this.currentPlayer = 'X';
                 this.gameOver = false;
